@@ -1,0 +1,142 @@
+[
+    {
+        "Date": "2024-10-27",
+        "Revenue": "35082000000",
+        "Net Income": "19309000000",
+        "EPS": null,
+        "Operating Income": "21869000000"
+    },
+    {
+        "Date": "2024-07-28",
+        "Revenue": "30040000000",
+        "Net Income": "16599000000",
+        "EPS": null,
+        "Operating Income": "18642000000"
+    },
+    {
+        "Date": "2024-04-28",
+        "Revenue": "26044000000",
+        "Net Income": "14881000000",
+        "EPS": null,
+        "Operating Income": "16909000000"
+    },
+    {
+        "Date": "2024-01-28",
+        "Revenue": "22103000000",
+        "Net Income": "12285000000",
+        "EPS": null,
+        "Operating Income": "13614000000"
+    },
+    {
+        "Date": "2023-10-29",
+        "Revenue": "18120000000",
+        "Net Income": "9243000000",
+        "EPS": null,
+        "Operating Income": "10417000000"
+    },
+    {
+        "Date": "2023-07-30",
+        "Revenue": "13507000000",
+        "Net Income": "6188000000",
+        "EPS": null,
+        "Operating Income": "6800000000"
+    },
+    {
+        "Date": "2023-04-30",
+        "Revenue": "7192000000",
+        "Net Income": "2043000000",
+        "EPS": null,
+        "Operating Income": "2140000000"
+    },
+    {
+        "Date": "2023-01-29",
+        "Revenue": "6051000000",
+        "Net Income": "1414000000",
+        "EPS": null,
+        "Operating Income": "1256000000"
+    },
+    {
+        "Date": "2022-10-30",
+        "Revenue": "5931000000",
+        "Net Income": "680000000",
+        "EPS": null,
+        "Operating Income": "601000000"
+    },
+    {
+        "Date": "2022-07-31",
+        "Revenue": "6704000000",
+        "Net Income": "656000000",
+        "EPS": null,
+        "Operating Income": "499000000"
+    },
+    {
+        "Date": "2022-05-01",
+        "Revenue": "8288000000",
+        "Net Income": "1618000000",
+        "EPS": null,
+        "Operating Income": "1868000000"
+    },
+    {
+        "Date": "2022-01-30",
+        "Revenue": "7643000000",
+        "Net Income": "3003000000",
+        "EPS": null,
+        "Operating Income": "2970000000"
+    },
+    {
+        "Date": "2021-10-31",
+        "Revenue": "7103000000",
+        "Net Income": "2464000000",
+        "EPS": null,
+        "Operating Income": "2671000000"
+    },
+    {
+        "Date": "2021-08-01",
+        "Revenue": "6507000000",
+        "Net Income": "2374000000",
+        "EPS": null,
+        "Operating Income": "2444000000"
+    },
+    {
+        "Date": "2021-05-02",
+        "Revenue": "5661000000",
+        "Net Income": "1912000000",
+        "EPS": null,
+        "Operating Income": "1956000000"
+    },
+    {
+        "Date": "2021-01-31",
+        "Revenue": "5003000000",
+        "Net Income": "1457000000",
+        "EPS": null,
+        "Operating Income": "1507000000"
+    },
+    {
+        "Date": "2020-10-25",
+        "Revenue": "4726000000",
+        "Net Income": "1336000000",
+        "EPS": null,
+        "Operating Income": "1398000000"
+    },
+    {
+        "Date": "2020-07-26",
+        "Revenue": "3866000000",
+        "Net Income": "622000000",
+        "EPS": null,
+        "Operating Income": "651000000"
+    },
+    {
+        "Date": "2020-04-26",
+        "Revenue": "3080000000",
+        "Net Income": "917000000",
+        "EPS": null,
+        "Operating Income": "976000000"
+    },
+    {
+        "Date": "2020-01-26",
+        "Revenue": "3105000000",
+        "Net Income": "950000000",
+        "EPS": null,
+        "Operating Income": "990000000"
+    }
+]
