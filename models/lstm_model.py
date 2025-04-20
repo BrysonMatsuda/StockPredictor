@@ -1,129 +1,105 @@
 import pandas as pd
-import numpy as np
 import torch
-import torch.nn as nn
-import torch.optim as optim
-import matplotlib.pyplot as plt
+import pickle
 from sklearn.preprocessing import MinMaxScaler
-from sklearn.model_selection import train_test_split
-from torch.utils.data import DataLoader, Dataset
-from torch.autograd import Variable
+import numpy as np
+from sklearn.metrics import classification_report
 
-# Load dataset
-df = pd.read_csv('data/raw/GOOG.csv', index_col='Date', parse_dates=True)
-
-# Select features (Close, Open, High, Low, Volume)
-features = ['Close', 'Open', 'High', 'Low', 'Volume']
-df = df[features]
-
-# Generate binary target: 1 if next day's close is higher, else 0
-df['Target'] = (df['Close'].shift(-1) > df['Close']).astype(int)
-
-# Drop last row (since it has no target)
-df = df[:-1]
-
-# Normalize all features
-scaler = MinMaxScaler()
-df[features] = scaler.fit_transform(df[features])
-
-plt.figure(figsize=(12,6))  # Set figure size
-plt.plot(df.index, df['Close'], label='Close Price')  # x-axis: date, y-axis: close price
-plt.xlabel('Date')
-plt.ylabel('Close Price (Normalized)')
-plt.title('Stock Close Price Over Time')
-plt.legend()
-plt.show()
-
-
-SEQ_LEN = 30  # Sequence length for LSTM
-
-def create_sequences(data, target, seq_len):
-    X, y = [], []
-    for i in range(len(data) - seq_len):
-        X.append(data[i:i+seq_len])
-        y.append(target[i+seq_len])
-    return np.array(X), np.array(y)
-
-# Convert DataFrame to numpy arrays
-X, y = create_sequences(df[features].values, df['Target'].values, SEQ_LEN)
-
-# Split data into train and test sets
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, shuffle=False)
-
-# Convert to PyTorch tensors
-X_train = torch.tensor(X_train, dtype=torch.float32)
-y_train = torch.tensor(y_train, dtype=torch.float32).view(-1, 1)
-X_test = torch.tensor(X_test, dtype=torch.float32)
-y_test = torch.tensor(y_test, dtype=torch.float32).view(-1, 1)
-
-# Define LSTM Model
-class StockLSTM(nn.Module):
-    def __init__(self, num_classes, input_size, hidden_size, num_layers):
-        super(StockLSTM, self).__init__()
-        self.num_classes = num_classes
-        self.num_layers = num_layers
-        self.input_size = input_size
-        self.hidden_size = hidden_size
-        self.seq_length = SEQ_LEN   
-
-        self.lstm = nn.LSTM(input_size=input_size, hidden_size=hidden_size, num_layers=num_layers, batch_first=True)
-        self.fc = nn.Linear(hidden_size, num_classes)
-        self.sigmoid = nn.Sigmoid()
+# Load the pretrained model
+class LSTM(torch.nn.Module):
+    def __init__(self, input_size, hidden_size, num_layers):
+        super(LSTM, self).__init__()
+        self.lstm = torch.nn.LSTM(input_size, hidden_size, num_layers, batch_first=True)
+        self.fc_price = torch.nn.Linear(hidden_size, 1)
+        self.fc_direction = torch.nn.Linear(hidden_size, 1)
 
     def forward(self, x):
-        h_0 = Variable(torch.zeros(self.num_layers, x.size(0), self.hidden_size))
-        c_0 = Variable(torch.zeros(self.num_layers, x.size(0), self.hidden_size))
-        ula, (h_out, _) = self.lstm(x, (h_0, c_0)) # call the lstm layer
-        
-        h_out = h_out.view(-1, self.hidden_size) # change the tensor shape
-        
-        out = self.fc(h_out) # call the fully connected layer
+        h0 = torch.zeros(num_layers, x.size(0), hidden_size)
+        c0 = torch.zeros(num_layers, x.size(0), hidden_size)
+        out, _ = self.lstm(x, (h0, c0))
+        out = out[:, -1, :]  # Use last output for prediction
+        return self.fc_price(out), self.fc_direction(out)
 
-        out = self.sigmoid(out)
-        
-        return out
+# Load the scaler used for preprocessing in the original model
+with open('scaler.pkl', 'rb') as f:
+    scaler = pickle.load(f)
 
-input_size = 5 # we only have one feature
-hidden_size = 50 # controls how large the model is
-num_layers = 1 # number of LSTMs (if more than one, then one LSTM goes into the other)
+# Load NVIDIA stock data (NVDA)
+df_nvda = pd.read_csv('data/raw/NVDA.csv', index_col='Date', parse_dates=True)
 
-num_classes = 1 # we only have one class
-model = StockLSTM(num_classes, input_size, hidden_size, num_layers)
+# Feature engineering on NVIDIA data (same as Google data)
+df_nvda['5_MA'] = df_nvda['Close'].rolling(window=5).mean()
+df_nvda['10_MA'] = df_nvda['Close'].rolling(window=10).mean()
+df_nvda['10_STD'] = df_nvda['Close'].rolling(window=10).std()
+df_nvda['Daily_Return'] = df_nvda['Close'].pct_change()
+df_nvda['Momentum'] = df_nvda['Close'] - df_nvda['Close'].shift(10)
 
-# Loss function and optimizer
-criterion = nn.BCELoss()
-optimizer = optim.Adam(model.parameters(), lr=0.01)  # Lower learning rate
+df_nvda.dropna(inplace=True)
 
-# Training loop
-EPOCHS = 500
-BATCH_SIZE = 32
-train_loader = DataLoader(list(zip(X_train, y_train)), batch_size=BATCH_SIZE, shuffle=True)
+features = ['Close', 'Open', 'High', 'Low', 'Volume', '5_MA', '10_MA', '10_STD', 'Daily_Return', 'Momentum']
+data_nvda = df_nvda[features].values
 
-for epoch in range(EPOCHS):
-    model.train()
-    epoch_loss = 0
-    for X_batch, y_batch in train_loader:
-        optimizer.zero_grad()
-        y_pred = model(X_batch)
-        loss = criterion(y_pred, y_batch)
-        loss.backward()
-        optimizer.step()
-        epoch_loss += loss.item()
+# Normalize NVIDIA data using the same scaler
+data_nvda_scaled = scaler.transform(data_nvda)
 
-    print(f"Epoch {epoch+1}/{EPOCHS}, Loss: {epoch_loss/len(train_loader):.4f}")
+# Sliding window function for NVDA (same as for GOOG)
+def sliding_windows(data, seq_length, future_offset=30):
+    x, y_price, y_direction, current_close = [], [], [], []
+    for i in range(len(data) - seq_length - future_offset):
+        _x = data[i:(i + seq_length)]
+        close_now = data[i + seq_length - 1][0]
+        close_future = data[i + seq_length + future_offset - 1][0]
 
-# Evaluation
-model.eval()
+        x.append(_x)
+        y_price.append(close_future)
+        y_direction.append(1 if close_future > close_now else 0)
+        current_close.append(close_now)
+    return np.array(x), np.array(y_price), np.array(y_direction), np.array(current_close)
+
+# Set the sequence length for the window
+seq_length = 30
+x_nvda, y_price_nvda, y_direction_nvda, current_close_nvda = sliding_windows(data_nvda_scaled, seq_length)
+
+# Convert to torch tensors
+x_nvda_tensor = torch.Tensor(x_nvda)
+y_price_nvda_tensor = torch.Tensor(y_price_nvda)
+y_direction_nvda_tensor = torch.Tensor(y_direction_nvda)
+
+# Initialize the LSTM model (same structure as before)
+input_size = x_nvda.shape[2]  # This should be the same as the input size used in training
+hidden_size = 64
+num_layers = 1
+
+lstm = LSTM(input_size, hidden_size, num_layers)
+
+# Load the pretrained weights
+lstm.load_state_dict(torch.load("model.pt"))
+
+# Set the model to evaluation mode
+lstm.eval()
+
+# Inference for NVIDIA stock data
 with torch.no_grad():
-    y_pred = model(X_test).numpy()
-    y_pred_class = (y_pred > 0.5).astype(int)
+    nvda_price_pred, nvda_direction_pred = lstm(x_nvda_tensor)
 
-# Accuracy
-accuracy = (y_pred_class.flatten() == y_test.numpy().flatten()).mean()
-print(f"Test Accuracy: {accuracy:.2f}")
+# Inverse transform the predictions to the original price scale
+nvda_price_pred = nvda_price_pred.detach().numpy()
+nvda_price_true = scaler.inverse_transform(np.hstack([nvda_price_pred, np.zeros((len(nvda_price_pred), input_size - 1))]))[:, 0]
 
-# Plot predictions
-plt.plot(y_test.numpy(), label="Actual", alpha=0.7)
-plt.plot(y_pred, label="Predicted", alpha=0.7)
-plt.legend()
-plt.show()
+# Calculate RMSE for price prediction
+nvda_rmse = np.sqrt(np.mean((nvda_price_true - y_price_nvda) ** 2))
+
+# Evaluate the direction accuracy
+nvda_direction_pred = (nvda_direction_pred.detach().numpy() > 0).astype(int)
+
+# Classification Report for Direction Prediction
+classification_report_nvda = classification_report(y_direction_nvda, nvda_direction_pred.flatten(), target_names=["Down", "Up"])
+
+# Direction accuracy
+nvda_acc = np.mean(nvda_direction_pred.flatten() == y_direction_nvda)
+
+# Print the results
+print(f"NVIDIA Direction Prediction Accuracy: {nvda_acc:.2f}")
+print(f"NVIDIA RMSE: {nvda_rmse:.2f}")
+print("\nClassification Report for Direction Prediction:")
+print(classification_report_nvda)
