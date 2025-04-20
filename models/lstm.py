@@ -153,3 +153,23 @@ print(f"Test RMSE: {test_rmse:.2f}")
 # Classification Report
 print("\nClassification Report for Direction Prediction:")
 print(classification_report(testY_direction.numpy(), test_direction_pred.flatten(), target_names=["Down", "Up"]))
+
+# ---- Naive Baseline Model ----
+# Naive price prediction: predict the price will be the same as current close
+naive_price_pred = testClose.numpy()
+
+# RMSE for naive model
+naive_rmse = np.sqrt(np.mean((naive_price_pred - test_y_price_true) ** 2))
+print(f"\nNaive Baseline RMSE: {naive_rmse:.2f}")
+
+# Naive direction prediction: predict the price will go up (1) always
+naive_direction_pred = np.ones_like(testY_direction.numpy())
+
+# Direction accuracy for naive model
+naive_acc = np.mean(naive_direction_pred.flatten() == testY_direction.numpy())
+print(f"Naive Baseline Direction Accuracy: {naive_acc:.2f}")
+
+# Classification report for naive model
+print("\nClassification Report for Naive Direction Prediction:")
+print(classification_report(testY_direction.numpy(), naive_direction_pred.flatten(), target_names=["Down", "Up"]))
+
