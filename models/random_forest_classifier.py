@@ -1,6 +1,6 @@
 # Note: The context for this model is that it is currently open time (start of trading day) and we
 # are trying to predict if/how to invest our money. Therefore we use past data (yesterday and before) 
-# to predict if the stock goes up/down within the next few coming days. The model uses multi-day trends in predictions
+# to predict the stock trends within the next few coming days. The model uses multi-day trends in predictions
 # since predicting trends for a single day has a lot of noise involved. The baseline model naively assumes
 # the next trend will follow the average of the return from the last 3 days.
 
@@ -8,29 +8,28 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.model_selection import train_test_split
-from sklearn.metrics import (
-    accuracy_score, classification_report, confusion_matrix,
-    roc_auc_score
-)
+from sklearn.model_selection import train_test_split, GridSearchCV, TimeSeriesSplit, RandomizedSearchCV
+from sklearn.metrics import mean_squared_error, r2_score
+from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
 import ta
+from scipy.stats import randint, uniform
+import joblib
 
-# CONFIG 
+# === CONFIG ===
 CSV_PATH = 'GOOG.csv'
+TARGET_TYPE = 'return_smoothed'  # options: 'return_smoothed', 'price', 'price_smoothed', 'return'
 TEST_SIZE = 0.2
-THRESHOLD = 0.5
-TARGET_TYPE = 'smoothed_return' # options 'smoothed_return' , 'oneday_return'
 
-# LOAD DATA 
+# === LOAD DATA ===
 df = pd.read_csv(CSV_PATH, parse_dates=['Date'])
 df.sort_values('Date', inplace=True)
 df.set_index('Date', inplace=True)
 
-# FEATURE ENGINEERING
+# === FEATURE ENGINEERING ===
 
 # Price lags
 for lag in range(1, 6):
-    df[f'Close_t{lag}'] = df['Close'].shift(lag)
+    df[f'Close_t-{lag}'] = df['Close'].shift(lag)
 
 # Returns over past intervals (last day, last 3 days, last 5 days)
 # shifted 1 day forward so we don't leak info about EOD today
@@ -62,42 +61,83 @@ df['High_t-1'] = df['High'].shift(1)
 df['Low_t-1'] = df['Low'].shift(1)
 df['Adj Close_t-1'] = df['Adj Close'].shift(1)
 
-# TARGET
-if TARGET_TYPE == "smoothed_return":
-    forward_return = df['Close'].pct_change().shift(-2).rolling(4).mean() # smoothed return starting EOD yesterday and ending 3 days from now (4 total)
-    df['Target'] = (forward_return > 0).astype(int) # up/down prediction is if it goes up/down within the next 3 days
-elif TARGET_TYPE == "oneday_return":
-    forward_return = df['Close'].pct_change()
-    df['Target'] = (forward_return > 0).astype(int)
+# === TARGET ===
+if TARGET_TYPE == 'return_smoothed':
+    df['Target'] = (df['Close'].pct_change().shift(-1).rolling(3).mean())
+    
+    # smoothed return starting EOD today and ending 2 days from now (3 total)
 
-# CLEANUP 
+    
+    df['Target'] = (df['Target'] > 0).astype(int)
+elif TARGET_TYPE == 'return': # return from EOD today to EOD tomorrow
+    df['Target'] = df['Close'].pct_change().shift(-1)
+    df['Target'] = (df['Target'] > 0).astype(int)
+else:
+    raise ValueError("Invalid TARGET_TYPE selected.")
+
 # Drop NaNs and remove todays attributes so they aren't used to train and bleed info
 df.dropna(inplace=True)
-df.drop(columns=['Volume', 'Close', 'High', 'Low', 'Adj Close'], inplace=True)
+df.drop(columns=['Volume'], inplace=True)
+df.drop(columns=['Close'], inplace=True)
+df.drop(columns=['High'], inplace=True)
+df.drop(columns=['Low'], inplace=True)
+df.drop(columns=['Adj Close'], inplace=True)
 
-# TRAIN/TEST SPLIT 
+# === MODEL SETUP ===
 features = [col for col in df.columns if col != 'Target']
 X = df[features]
 y = df['Target']
+
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=TEST_SIZE, shuffle=False)
 
-# MODEL 
-model = RandomForestClassifier(n_estimators=300, max_depth=6, min_samples_split=2, random_state=42)
-model.fit(X_train, y_train)
-y_proba = model.predict_proba(X_test)[:, 1]
-y_pred = (y_proba >= THRESHOLD).astype(int)
+param_dist = {
+    "n_estimators":   randint(100, 701),      # draws integers 100‑700
+    "max_depth":      [None, 8, 9, 10, 11, 12],
+    "min_samples_split":  randint(2, 11),
+    "min_samples_leaf":   randint(1, 6),
+    "max_features":   uniform(0.2, 0.8),      # real numbers 0.2‑1.0
+    "bootstrap":      [True, False],
+    "random_state":   [42],
+}
 
-# CLASSIFICATION REPORT 
-print("\nClassification Performance ")
-print(f"Accuracy (Threshold = {THRESHOLD}): {accuracy_score(y_test, y_pred):.2f}")
-print(classification_report(y_test, y_pred, target_names=["Down", "Up"]))
-print("Confusion Matrix:\n", confusion_matrix(y_test, y_pred))
-print(f"ROC AUC Score: {roc_auc_score(y_test, y_proba):.3f}")
+tscv = TimeSeriesSplit(n_splits=2)
 
-# BASELINE 
-# Just if the average of the return from the last 3 days is positive or negative
+# Model
+model = RandomForestClassifier()
+
+grid = RandomizedSearchCV(
+    estimator=model,
+    param_distributions=param_dist,
+    n_iter=100,
+    cv=tscv,
+    scoring="roc_auc",
+    n_jobs=-1,
+    verbose=10,
+    random_state=42,
+)
+
+grid.fit(X_train, y_train)
+
+print("\n=== Best hyper‑parameters (CV) ===")
+print(grid.best_params_)
+
+model = grid.best_estimator_
+joblib.dump(model, "best_random_forest_classifier.pkl")
+y_pred = model.predict(X_test)
+
+# feature importance
+feat_imp = pd.Series(model.feature_importances_, index=features).sort_values(ascending=False)
+print("\n=== Top 20 features ===")
+print(feat_imp.head(20).to_string(float_format="%.4f"))
+
+# Evaluation
+acc = accuracy_score(y_test, y_pred)
+print(f"\n=== Model Performance ===")
+print(f"Accuracy: {acc:.3f}")
+print("\nDetailed report:\n", classification_report(y_test, y_pred))
+
+# Baseline 
 naive_pred = (X_test['return_3d'] > 0).astype(int)
-print("\nNaive Baseline:")
-print(f"Accuracy: {accuracy_score(y_test, naive_pred):.2f}")
-print(classification_report(y_test, naive_pred, target_names=["Down", "Up"]))
-print("Confusion Matrix:\n", confusion_matrix(y_test, naive_pred))
+naive_acc  = accuracy_score(y_test, naive_pred)
+print(f"\n=== Naive Baseline ===\nAccuracy: {naive_acc:.3f}")
+print("\nDetailed report:\n", classification_report(y_test, naive_pred))

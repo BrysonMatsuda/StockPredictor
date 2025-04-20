@@ -8,13 +8,15 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 from sklearn.ensemble import RandomForestRegressor
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import train_test_split, GridSearchCV, TimeSeriesSplit, RandomizedSearchCV
 from sklearn.metrics import mean_squared_error, r2_score
+from scipy.stats import randint, uniform
 import ta
+import joblib
 
 # === CONFIG ===
 CSV_PATH = 'GOOG.csv'
-TARGET_TYPE = 'return_smoothed'  # options: 'return_smoothed', 'price', 'price_smoothed'
+TARGET_TYPE = 'return_smoothed'  # options: 'return_smoothed', 'price', 'price_smoothed', 'return'
 TEST_SIZE = 0.2
 
 # === LOAD DATA ===
@@ -60,11 +62,13 @@ df['Adj Close_t-1'] = df['Adj Close'].shift(1)
 
 # === TARGET ===
 if TARGET_TYPE == 'return_smoothed':
-    df['Target'] = df['Close'].pct_change().shift(-2).rolling(4).mean() # smoothed return starting EOD today and ending 2 days from now (3 total)
+    df['Target'] = (df['Close'].pct_change().shift(-1).rolling(3).mean()) # smoothed return starting EOD today and ending 2 days from now (3 total)
 elif TARGET_TYPE == 'price':
     df['Target'] = df['Close'] # price at the end of the day
 elif TARGET_TYPE == 'price_smoothed':
     df['Target'] = df['Close'].shift(-1).rolling(3).mean() # average price at the end of the day for next 3 days
+elif TARGET_TYPE == 'return': # return from EOD today to EOD tomorrow
+    df['Target'] = (df['Close'].pct_change().shift(-1))
 else:
     raise ValueError("Invalid TARGET_TYPE selected.")
 
@@ -83,14 +87,38 @@ y = df['Target']
 
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=TEST_SIZE, shuffle=False)
 
-# Model
-model = RandomForestRegressor(
-    n_estimators=300,
-    max_depth=6,
-    min_samples_split=2,
-    random_state=42
+param_distributions = {
+    "n_estimators": randint(200, 701),               # range 200–700
+    "max_depth": [None, 6, 8, 10, 12],     # None, 6, 8, 10, 12
+    "min_samples_split": randint(2, 11),             # 2–10
+    "min_samples_leaf": randint(1, 5),               # 1–4
+    "max_features": ["sqrt", "log2", uniform(0.3, 0.7)],  # discrete and continuous options
+    "bootstrap": [True, False],
+    "random_state": [42],
+}
+
+tscv = TimeSeriesSplit(n_splits=5)
+
+model = RandomForestRegressor()
+
+grid = RandomizedSearchCV(
+    estimator=model,
+    param_distributions=param_distributions,
+    n_iter=50,
+    cv=tscv,
+    scoring="r2",
+    n_jobs=-1,
+    verbose=10,
+    random_state=42,
 )
-model.fit(X_train, y_train)
+
+grid.fit(X_train, y_train)
+
+print("\n=== Best hyper‑parameters (CV) ===")
+print(grid.best_params_)
+
+model = grid.best_estimator_
+joblib.dump(model, "best_random_forest_regressor.pkl")
 y_pred = model.predict(X_test)
 
 # Evaluation
@@ -99,8 +127,9 @@ r2 = r2_score(y_test, y_pred)
 # directional_acc = np.mean((np.sign(y_pred) == np.sign(y_test)).astype(float))
 
 print("\n=== Model Performance ===")
-print(f"{TARGET_TYPE.upper()} | MSE: {mse:.6f} | R²: {r2:.4f}")
-# print(f"{TARGET_TYPE.upper()} | MSE: {mse:.6f} | R²: {r2:.4f} | Directional Accuracy: {directional_acc:.2f}")
+#print(f"{TARGET_TYPE.upper()} | MSE: {mse:.6f} | R²: {r2:.4f}")
+directional_acc = np.mean((np.sign(y_pred) == np.sign(y_test)).astype(float))
+print(f"{TARGET_TYPE.upper()} | MSE: {mse:.6f} | R²: {r2:.4f} | Directional Accuracy: {directional_acc:.2f}")
 
 # Baseline 
 naive_pred = X_test['Close_t-1'] if TARGET_TYPE.startswith('price') else X_test['return_3d']/3
@@ -109,8 +138,9 @@ naive_r2 = r2_score(y_test, naive_pred)
 # naive_directional_acc = np.mean((np.sign(naive_pred) == np.sign(y_test)).astype(float))
 
 print("\n=== Naive Baseline ===")
-print(f"MSE: {naive_mse:.6f} | R²: {naive_r2:.4f}")
-# print(f"MSE: {naive_mse:.6f} | R²: {naive_r2:.4f} | Directional Accuracy: {naive_directional_acc:.2f}")
+#print(f"MSE: {naive_mse:.6f} | R²: {naive_r2:.4f}")
+naive_directional_acc = np.mean((np.sign(naive_pred) == np.sign(y_test)).astype(float))
+print(f"MSE: {naive_mse:.6f} | R²: {naive_r2:.4f} | Directional Accuracy: {naive_directional_acc:.2f}")
 
 # Plot results
 plt.figure(figsize=(18, 6))
