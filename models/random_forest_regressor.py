@@ -99,7 +99,7 @@ param_distributions = {
 
 tscv = TimeSeriesSplit(n_splits=5)
 
-model = RandomForestRegressor()
+model = RandomForestRegressor(n_estimators=300, max_depth=6, min_samples_split=2, random_state=42)
 
 grid = RandomizedSearchCV(
     estimator=model,
@@ -112,24 +112,38 @@ grid = RandomizedSearchCV(
     random_state=42,
 )
 
-grid.fit(X_train, y_train)
+#grid.fit(X_train, y_train)
+model.fit(X_train, y_train)
 
 print("\n=== Best hyper‑parameters (CV) ===")
-print(grid.best_params_)
+#print(grid.best_params_)
 
-model = grid.best_estimator_
-joblib.dump(model, "best_random_forest_regressor.pkl")
+#model = grid.best_estimator_
+#joblib.dump(model, "best_random_forest_regressor.pkl")
+
+# Training evaluation
+y_train_pred = model.predict(X_train)
+train_mse = mean_squared_error(y_train, y_train_pred)
+train_r2 = r2_score(y_train, y_train_pred)
+train_rmse = np.sqrt(train_mse)
+train_directional_acc = np.mean((np.sign(y_train_pred) == np.sign(y_train)).astype(float))
+
+print("\n=== Training Performance ===")
+print(f"{TARGET_TYPE.upper()} | MSE: {train_mse:.6f} | RMSE: {train_rmse:.6f} | R²: {train_r2:.4f} | Directional Accuracy: {train_directional_acc:.2f}")
+
+
 y_pred = model.predict(X_test)
 
 # Evaluation
 mse = mean_squared_error(y_test, y_pred)
 r2 = r2_score(y_test, y_pred)
+rmse = np.sqrt(mse)
 # directional_acc = np.mean((np.sign(y_pred) == np.sign(y_test)).astype(float))
 
 print("\n=== Model Performance ===")
 #print(f"{TARGET_TYPE.upper()} | MSE: {mse:.6f} | R²: {r2:.4f}")
 directional_acc = np.mean((np.sign(y_pred) == np.sign(y_test)).astype(float))
-print(f"{TARGET_TYPE.upper()} | MSE: {mse:.6f} | R²: {r2:.4f} | Directional Accuracy: {directional_acc:.2f}")
+print(f"{TARGET_TYPE.upper()} | MSE: {mse:.6f} | RMSE: {rmse:.6f} | R²: {r2:.4f} | Directional Accuracy: {directional_acc:.2f}")
 
 # Baseline 
 naive_pred = X_test['Close_t-1'] if TARGET_TYPE.startswith('price') else X_test['return_3d']/3

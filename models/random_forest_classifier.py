@@ -92,7 +92,7 @@ X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=TEST_SIZE, s
 
 param_dist = {
     "n_estimators":   randint(100, 701),      # draws integers 100‑700
-    "max_depth":      [None, 8, 9, 10, 11, 12],
+    "max_depth":      [2, 3, 4, 5, 8, 9, 10, 11, 12], # [2, 3, 4, 5, 8, 9, 10, 11, 12] Accuracy: 0.686      [None, 8, 9, 10, 11, 12] Accuracy: 0.695           [None, 2, 3, 4, 5, 6]   Accuracy: 0.686
     "min_samples_split":  randint(2, 11),
     "min_samples_leaf":   randint(1, 6),
     "max_features":   uniform(0.2, 0.8),      # real numbers 0.2‑1.0
@@ -104,6 +104,8 @@ tscv = TimeSeriesSplit(n_splits=2)
 
 # Model
 model = RandomForestClassifier()
+#model = RandomForestClassifier(n_estimators=300, max_depth=6, min_samples_split=2, random_state=42)
+#model.fit(X_train, y_train)
 
 grid = RandomizedSearchCV(
     estimator=model,
@@ -122,6 +124,11 @@ print("\n=== Best hyper‑parameters (CV) ===")
 print(grid.best_params_)
 
 model = grid.best_estimator_
+
+y_train_pred = model.predict(X_train)
+train_acc = accuracy_score(y_train, y_train_pred)
+print(f"\n=== Training Accuracy ===\nAccuracy: {train_acc:.3f}")
+
 joblib.dump(model, "best_random_forest_classifier.pkl")
 y_pred = model.predict(X_test)
 
