@@ -17,7 +17,7 @@ import joblib
 # === CONFIG ===
 CSV_PATH = 'GOOG.csv'
 TARGET_TYPE = 'return_smoothed'  # options: 'return_smoothed', 'price', 'price_smoothed', 'return'
-TEST_SIZE = 0.2
+TEST_SIZE = 0.25
 
 # === LOAD DATA ===
 df = pd.read_csv(CSV_PATH, parse_dates=['Date'])

@@ -18,7 +18,7 @@ import joblib
 # === CONFIG ===
 CSV_PATH = 'GOOG.csv'
 TARGET_TYPE = 'return_smoothed'  # options: 'return_smoothed', 'price', 'price_smoothed', 'return'
-TEST_SIZE = 0.2
+TEST_SIZE = 0.25
 
 # === LOAD DATA ===
 df = pd.read_csv(CSV_PATH, parse_dates=['Date'])
@@ -92,7 +92,7 @@ X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=TEST_SIZE, s
 
 param_dist = {
     "n_estimators":   randint(100, 701),      # draws integers 100‑700
-    "max_depth":      [2, 3, 4, 5, 8, 9, 10, 11, 12], # [2, 3, 4, 5, 8, 9, 10, 11, 12] Accuracy: 0.686      [None, 8, 9, 10, 11, 12] Accuracy: 0.695           [None, 2, 3, 4, 5, 6]   Accuracy: 0.686
+    "max_depth":      [None, 8, 9, 10, 11, 12], # best model (shallow): [3, 4, 5, 8, 9, 10, 11, 12]    [2, 3, 4, 5, 8, 9, 10, 11, 12]  Deeper model (overfit): [None, 8, 9, 10, 11, 12]
     "min_samples_split":  randint(2, 11),
     "min_samples_leaf":   randint(1, 6),
     "max_features":   uniform(0.2, 0.8),      # real numbers 0.2‑1.0
